@@ -1,6 +1,7 @@
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras.layers import Input, Embedding, Concatenate, Dropout, TimeDistributed, Dense
+from keras import Model
+from keras.layers import Input, Embedding, Concatenate, Dropout, TimeDistributed, Dense
 from tensorflow.keras.callbacks import Callback
 import tensorflow.keras.backend as K
 from tensorflow.keras.metrics import sparse_top_k_categorical_accuracy
@@ -26,8 +27,8 @@ from keras_checkpoint_saver_callback import ModelTrainingStatus, ModelTrainingSt
 
 class Code2VecModel(Code2VecModelBase):
     def __init__(self, config: Config):
-        self.keras_train_model: Optional[keras.Model] = None
-        self.keras_eval_model: Optional[keras.Model] = None
+        self.keras_train_model: Optional[Model] = None
+        self.keras_eval_model: Optional[Model] = None
         self.keras_model_predict_function: Optional[K.GraphExecutionFunction] = None
         self.training_status: ModelTrainingStatus = ModelTrainingStatus()
         self._checkpoint: Optional[tf.train.Checkpoint] = None
@@ -71,7 +72,7 @@ class Code2VecModel(Code2VecModelBase):
 
         # Wrap the layers into a Keras model, using our subtoken-metrics and the CE loss.
         inputs = [path_source_token_input, path_input, path_target_token_input, context_valid_mask]
-        self.keras_train_model = keras.Model(inputs=inputs, outputs=target_index)
+        self.keras_train_model = Model(inputs=inputs, outputs=target_index)
 
         # Actual target word predictions (as strings). Used as a second output layer.
         # Used for predict() and for the evaluation metrics calculations.
@@ -83,7 +84,7 @@ class Code2VecModel(Code2VecModelBase):
         # We use another dedicated Keras model for evaluation.
         # The evaluation model outputs the `topk_predicted_words` as a 2nd output.
         # The separation between train and eval models is for efficiency.
-        self.keras_eval_model = keras.Model(
+        self.keras_eval_model = Model(
             inputs=inputs, outputs=[target_index, topk_predicted_words], name="code2vec-keras-model")
 
         # We use another dedicated Keras function to produce predictions.

@@ -44,9 +44,9 @@ class Config:
         return parser
 
     def set_defaults(self):
-        self.NUM_TRAIN_EPOCHS = 20
+        self.NUM_TRAIN_EPOCHS = 30
         self.SAVE_EVERY_EPOCHS = 1
-        self.TRAIN_BATCH_SIZE = 1024
+        self.TRAIN_BATCH_SIZE = 60
         self.TEST_BATCH_SIZE = self.TRAIN_BATCH_SIZE
         self.TOP_K_WORDS_CONSIDERED_DURING_PREDICTION = 10
         self.NUM_BATCHES_TO_LOG_PROGRESS = 100
@@ -61,7 +61,7 @@ class Config:
         self.MAX_TOKEN_VOCAB_SIZE = 1301136
         self.MAX_TARGET_VOCAB_SIZE = 261245
         self.MAX_PATH_VOCAB_SIZE = 911417
-        self.DEFAULT_EMBEDDINGS_SIZE = 128
+        self.DEFAULT_EMBEDDINGS_SIZE = 256
         self.TOKEN_EMBEDDINGS_SIZE = self.DEFAULT_EMBEDDINGS_SIZE
         self.PATH_EMBEDDINGS_SIZE = self.DEFAULT_EMBEDDINGS_SIZE
         self.CODE_VECTOR_SIZE = self.context_vector_size
