@@ -71,7 +71,12 @@ def ExtractFeaturesForDirsList(args, dirs):
            ExtractFeaturesForDir(args, dir, '')
         output_files = os.listdir(TMP_DIR)
         for f in output_files:
-            os.system("cat %s/%s" % (TMP_DIR, f))
+            if f == "webshell":
+                cmd = "cut -d' ' -f2- | awk '{ printf \"webshell \"; print }'"
+                os.system(f"cat {TMP_DIR}/{f} | {cmd}")
+            else:
+                cmd_normal= "cut -d' ' -f2- | awk '{ printf \"normal \"; print }'"
+                os.system(f"cat {TMP_DIR}/{f} | {cmd_normal}")
     finally:
         shutil.rmtree(TMP_DIR, ignore_errors=True)
 
