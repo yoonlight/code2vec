@@ -1,7 +1,7 @@
 import tensorflow as tf
 from tensorflow import keras
-from keras import Model
-from keras.layers import Input, Embedding, Concatenate, Dropout, TimeDistributed, Dense
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input, Embedding, Concatenate, Dropout, TimeDistributed, Dense
 from tensorflow.keras.callbacks import Callback
 import tensorflow.keras.backend as K
 from tensorflow.keras.metrics import sparse_top_k_categorical_accuracy
@@ -23,6 +23,7 @@ from common import common
 from model_base import Code2VecModelBase, ModelEvaluationResults, ModelPredictionResults
 from keras_checkpoint_saver_callback import ModelTrainingStatus, ModelTrainingStatusTrackerCallback,\
     ModelCheckpointSaverCallback, MultiBatchCallback, ModelTrainingProgressLoggerCallback
+from tensorflow.keras.callbacks import ModelCheckpoint
 
 
 class Code2VecModel(Code2VecModelBase):
@@ -68,7 +69,7 @@ class Code2VecModel(Code2VecModelBase):
 
         # "Decode": Now we use another dense layer to get the target word embedding from each code vector.
         target_index = Dense(
-            self.vocabs.target_vocab.size, use_bias=False, activation='softmax', name='target_index')(code_vectors)
+            1, use_bias=False, activation='sigmoid', name='target_index')(code_vectors)
 
         # Wrap the layers into a Keras model, using our subtoken-metrics and the CE loss.
         inputs = [path_source_token_input, path_input, path_target_token_input, context_valid_mask]
@@ -76,24 +77,24 @@ class Code2VecModel(Code2VecModelBase):
 
         # Actual target word predictions (as strings). Used as a second output layer.
         # Used for predict() and for the evaluation metrics calculations.
-        topk_predicted_words, topk_predicted_words_scores = TopKWordPredictionsLayer(
-            self.config.TOP_K_WORDS_CONSIDERED_DURING_PREDICTION,
-            self.vocabs.target_vocab.get_index_to_word_lookup_table(),
-            name='target_string')(target_index)
+        # topk_predicted_words, topk_predicted_words_scores = TopKWordPredictionsLayer(
+        #     self.config.TOP_K_WORDS_CONSIDERED_DURING_PREDICTION,
+        #     self.vocabs.target_vocab.get_index_to_word_lookup_table(),
+        #     name='target_string')(target_index)
 
-        # We use another dedicated Keras model for evaluation.
-        # The evaluation model outputs the `topk_predicted_words` as a 2nd output.
-        # The separation between train and eval models is for efficiency.
-        self.keras_eval_model = Model(
-            inputs=inputs, outputs=[target_index, topk_predicted_words], name="code2vec-keras-model")
+        # # We use another dedicated Keras model for evaluation.
+        # # The evaluation model outputs the `topk_predicted_words` as a 2nd output.
+        # # The separation between train and eval models is for efficiency.
+        # self.keras_eval_model = Model(
+        #     inputs=inputs, outputs=[target_index, topk_predicted_words], name="code2vec-keras-model")
 
-        # We use another dedicated Keras function to produce predictions.
-        # It have additional outputs than the original model.
-        # It is based on the trained layers of the original model and uses their weights.
-        predict_outputs = tuple(KerasPredictionModelOutput(
-            target_index=target_index, code_vectors=code_vectors, attention_weights=attention_weights,
-            topk_predicted_words=topk_predicted_words, topk_predicted_words_scores=topk_predicted_words_scores))
-        self.keras_model_predict_function = K.function(inputs=inputs, outputs=predict_outputs)
+        # # We use another dedicated Keras function to produce predictions.
+        # # It have additional outputs than the original model.
+        # # It is based on the trained layers of the original model and uses their weights.
+        # predict_outputs = tuple(KerasPredictionModelOutput(
+        #     target_index=target_index, code_vectors=code_vectors, attention_weights=attention_weights,
+        #     topk_predicted_words=topk_predicted_words, topk_predicted_words_scores=topk_predicted_words_scores))
+        # self.keras_model_predict_function = K.function(inputs=inputs, outputs=predict_outputs)
 
     def _create_metrics_for_keras_eval_model(self) -> Dict[str, List[Union[Callable, keras.metrics.Metric]]]:
         top_k_acc_metrics = []
@@ -127,13 +128,15 @@ class Code2VecModel(Code2VecModelBase):
             return tf.constant(0.0, shape=(), dtype=tf.float32)
 
         self.keras_train_model.compile(
-            loss='sparse_categorical_crossentropy',
+            # loss='sparse_categorical_crossentropy',
+            loss='binary_crossentropy',
+            metrics=['acc'],
             optimizer=optimizer)
 
-        self.keras_eval_model.compile(
-            loss={'target_index': 'sparse_categorical_crossentropy', 'target_string': zero_loss},
-            optimizer=optimizer,
-            metrics=self._create_metrics_for_keras_eval_model())
+        # self.keras_eval_model.compile(
+        #     loss={'target_index': 'sparse_categorical_crossentropy', 'target_string': zero_loss},
+        #     optimizer=optimizer,
+        #     metrics=self._create_metrics_for_keras_eval_model())
 
     def _create_data_reader(self, estimator_action: EstimatorAction, repeat_endlessly: bool = False):
         return PathContextReader(
@@ -146,14 +149,20 @@ class Code2VecModel(Code2VecModelBase):
     def _create_train_callbacks(self) -> List[Callback]:
         # TODO: do we want to use early stopping? if so, use the right chechpoint manager and set the correct
         #       `monitor` quantity (example: monitor='val_acc', mode='max')
+        checkpoint_filepath='models/jsp/'
 
         keras_callbacks = [
             ModelTrainingStatusTrackerCallback(self.training_status),
             ModelTrainingProgressLoggerCallback(self.config, self.training_status),
         ]
         if self.config.is_saving:
-            keras_callbacks.append(ModelCheckpointSaverCallback(
-                self, self.config.SAVE_EVERY_EPOCHS, self.logger))
+            keras_callbacks.append(ModelCheckpoint(filepath=checkpoint_filepath,
+                                                   save_weights_only=True,
+                                                   monitor='loss',
+                                                   mode='min',
+                                                   save_best_only=True))            
+            # keras_callbacks.append(ModelCheckpointSaverCallback(
+            #     self, self.config.SAVE_EVERY_EPOCHS, self.logger))
         if self.config.is_testing:
             keras_callbacks.append(ModelEvaluationCallback(self))
         if self.config.USE_TENSORBOARD:
