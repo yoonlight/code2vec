@@ -1,10 +1,11 @@
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, Embedding, Concatenate, Dropout, TimeDistributed, Dense
+from tensorflow.keras.layers import Input, Embedding, Concatenate, Dropout, TimeDistributed, Dense, Flatten
 from tensorflow.keras.callbacks import Callback
 import tensorflow.keras.backend as K
-from tensorflow.keras.metrics import sparse_top_k_categorical_accuracy
+from tensorflow.keras.metrics import sparse_top_k_categorical_accuracy, Recall, Precision
+import tensorflow_addons as tfa
 
 from path_context_reader import PathContextReader, ModelInputTensorsFormer, ReaderInputTensors, EstimatorAction
 import os
@@ -128,9 +129,10 @@ class Code2VecModel(Code2VecModelBase):
             return tf.constant(0.0, shape=(), dtype=tf.float32)
 
         self.keras_train_model.compile(
-            # loss='sparse_categorical_crossentropy',
             loss='binary_crossentropy',
-            metrics=['acc'],
+            metrics=['acc', Precision(), Recall(),
+            tfa.metrics.F1Score(num_classes=1)
+            ],
             optimizer=optimizer)
 
         # self.keras_eval_model.compile(
@@ -149,7 +151,7 @@ class Code2VecModel(Code2VecModelBase):
     def _create_train_callbacks(self) -> List[Callback]:
         # TODO: do we want to use early stopping? if so, use the right chechpoint manager and set the correct
         #       `monitor` quantity (example: monitor='val_acc', mode='max')
-        checkpoint_filepath='models/jsp/'
+        checkpoint_filepath='models/jsp2/result.h5'
 
         keras_callbacks = [
             ModelTrainingStatusTrackerCallback(self.training_status),
@@ -160,6 +162,7 @@ class Code2VecModel(Code2VecModelBase):
                                                    save_weights_only=True,
                                                    monitor='loss',
                                                    mode='min',
+                                                   verbose=1,
                                                    save_best_only=True))            
             # keras_callbacks.append(ModelCheckpointSaverCallback(
             #     self, self.config.SAVE_EVERY_EPOCHS, self.logger))
@@ -176,6 +179,7 @@ class Code2VecModel(Code2VecModelBase):
     def train(self):
         # initialize the input pipeline reader
         train_data_input_reader = self._create_data_reader(estimator_action=EstimatorAction.Train)
+        val_data_input_reader = self._create_data_reader(estimator_action=EstimatorAction.Evaluate)
 
         training_history = self.keras_train_model.fit(
             train_data_input_reader.get_dataset(),
@@ -183,24 +187,28 @@ class Code2VecModel(Code2VecModelBase):
             epochs=self.config.NUM_TRAIN_EPOCHS,
             initial_epoch=self.training_status.nr_epochs_trained,
             verbose=self.config.VERBOSE_MODE,
+            validation_data=val_data_input_reader.get_dataset(),
             callbacks=self._create_train_callbacks())
 
         self.log(training_history)
 
     def evaluate(self) -> Optional[ModelEvaluationResults]:
         val_data_input_reader = self._create_data_reader(estimator_action=EstimatorAction.Evaluate)
-        eval_res = self.keras_eval_model.evaluate(
+        eval_res = self.keras_train_model.evaluate(
             val_data_input_reader.get_dataset(),
-            steps=self.config.test_steps,
+            # steps=self.config.test_steps,
             verbose=self.config.VERBOSE_MODE)
-        k = self.config.TOP_K_WORDS_CONSIDERED_DURING_PREDICTION
-        return ModelEvaluationResults(
-            topk_acc=eval_res[3:k+3],
-            subtoken_precision=eval_res[k+3],
-            subtoken_recall=eval_res[k+4],
-            subtoken_f1=eval_res[k+5],
-            loss=eval_res[1]
-        )
+        self.log(eval_res)
+        self.log(val_data_input_reader.get_dataset())
+        # self.log(self.keras_train_model.predict(val_data_input_reader.get_dataset()))
+        # k = self.config.TOP_K_WORDS_CONSIDERED_DURING_PREDICTION
+        # return ModelEvaluationResults(
+        #     topk_acc=eval_res[3:k+3],
+        #     subtoken_precision=eval_res[k+3],
+        #     subtoken_recall=eval_res[k+4],
+        #     subtoken_f1=eval_res[k+5],
+        #     loss=eval_res[1]
+        # )
 
     def predict(self, predict_data_rows: Iterable[str]) -> List[ModelPredictionResults]:
         predict_input_reader = self._create_data_reader(estimator_action=EstimatorAction.Predict)
@@ -209,31 +217,31 @@ class Code2VecModel(Code2VecModelBase):
         for input_row in input_iterator:
             # perform the actual prediction and get raw results.
             input_for_predict = input_row[0][:4]  # we want only the relevant input vectors (w.o. the targets).
-            prediction_results = self.keras_model_predict_function(input_for_predict)
+            prediction_results = self.keras_train_model.predict(input_for_predict)
 
-            # make `input_row` and `prediction_results` easy to read (by accessing named fields).
-            prediction_results = KerasPredictionModelOutput(
-                *common.squeeze_single_batch_dimension_for_np_arrays(prediction_results))
-            input_row = _KerasModelInputTensorsFormer(
-                estimator_action=EstimatorAction.Predict).from_model_input_form(input_row)
-            input_row = ReaderInputTensors(*common.squeeze_single_batch_dimension_for_np_arrays(input_row))
+            # # make `input_row` and `prediction_results` easy to read (by accessing named fields).
+            # prediction_results = KerasPredictionModelOutput(
+            #     *common.squeeze_single_batch_dimension_for_np_arrays(prediction_results))
+            # input_row = _KerasModelInputTensorsFormer(
+            #     estimator_action=EstimatorAction.Predict).from_model_input_form(input_row)
+            # input_row = ReaderInputTensors(*common.squeeze_single_batch_dimension_for_np_arrays(input_row))
 
-            # calculate the attention weight for each context
-            attention_per_context = self._get_attention_weight_per_context(
-                path_source_strings=input_row.path_source_token_strings,
-                path_strings=input_row.path_strings,
-                path_target_strings=input_row.path_target_token_strings,
-                attention_weights=prediction_results.attention_weights
-            )
+            # # calculate the attention weight for each context
+            # attention_per_context = self._get_attention_weight_per_context(
+            #     path_source_strings=input_row.path_source_token_strings,
+            #     path_strings=input_row.path_strings,
+            #     path_target_strings=input_row.path_target_token_strings,
+            #     attention_weights=prediction_results.attention_weights
+            # )
 
-            # store the calculated prediction results in the wanted format.
-            model_prediction_results = ModelPredictionResults(
-                original_name=common.binary_to_string(input_row.target_string.item()),
-                topk_predicted_words=common.binary_to_string_list(prediction_results.topk_predicted_words),
-                topk_predicted_words_scores=prediction_results.topk_predicted_words_scores,
-                attention_per_context=attention_per_context,
-                code_vector=prediction_results.code_vectors)
-            all_model_prediction_results.append(model_prediction_results)
+            # # store the calculated prediction results in the wanted format.
+            # model_prediction_results = ModelPredictionResults(
+            #     original_name=common.binary_to_string(input_row.target_string.item()),
+            #     topk_predicted_words=common.binary_to_string_list(prediction_results.topk_predicted_words),
+            #     topk_predicted_words_scores=prediction_results.topk_predicted_words_scores,
+            #     attention_per_context=attention_per_context,
+            #     code_vector=prediction_results.code_vectors)
+            all_model_prediction_results.append(prediction_results)
 
         return all_model_prediction_results
 
@@ -370,13 +378,13 @@ class ModelEvaluationCallback(MultiBatchCallback):
         self.code2vec_model.log('Done evaluating (took {}). Evaluation results:'.format(
             str(datetime.timedelta(seconds=int(eval_duration)))))
 
-        self.code2vec_model.log(
-            '    loss: {loss:.4f}, f1: {f1:.4f}, recall: {recall:.4f}, precision: {precision:.4f}'.format(
-                loss=evaluation_results.loss, f1=evaluation_results.subtoken_f1,
-                recall=evaluation_results.subtoken_recall, precision=evaluation_results.subtoken_precision))
-        top_k_acc_formated = ['top{}: {:.4f}'.format(i, acc) for i, acc in enumerate(evaluation_results.topk_acc, start=1)]
-        for top_k_acc_chunk in common.chunks(top_k_acc_formated, 5):
-            self.code2vec_model.log('    ' + (', '.join(top_k_acc_chunk)))
+        # self.code2vec_model.log(
+        #     '    loss: {loss:.4f}, f1: {f1:.4f}, recall: {recall:.4f}, precision: {precision:.4f}'.format(
+        #         loss=evaluation_results.loss, f1=evaluation_results.subtoken_f1,
+        #         recall=evaluation_results.subtoken_recall, precision=evaluation_results.subtoken_precision))
+        # top_k_acc_formated = ['top{}: {:.4f}'.format(i, acc) for i, acc in enumerate(evaluation_results.topk_acc, start=1)]
+        # for top_k_acc_chunk in common.chunks(top_k_acc_formated, 5):
+        #     self.code2vec_model.log('    ' + (', '.join(top_k_acc_chunk)))
 
 
 class _KerasModelInputTensorsFormer(ModelInputTensorsFormer):
@@ -398,7 +406,9 @@ class _KerasModelInputTensorsFormer(ModelInputTensorsFormer):
         if self.estimator_action.is_train:
             targets = input_tensors.target_index
         else:
-            targets = {'target_index': input_tensors.target_index, 'target_string': input_tensors.target_string}
+            # targets = {'target_index': input_tensors.target_index, 'target_string': input_tensors.target_string}
+            # targets = {'target_index': input_tensors.target_index}
+            targets = input_tensors.target_index
         if self.estimator_action.is_predict:
             inputs += (input_tensors.path_source_token_strings, input_tensors.path_strings,
                        input_tensors.path_target_token_strings)
@@ -411,8 +421,9 @@ class _KerasModelInputTensorsFormer(ModelInputTensorsFormer):
             path_indices=inputs[1],
             path_target_token_indices=inputs[2],
             context_valid_mask=inputs[3],
-            target_index=targets if self.estimator_action.is_train else targets['target_index'],
-            target_string=targets['target_string'] if not self.estimator_action.is_train else None,
+            # target_index=targets if self.estimator_action.is_train else targets['target_index'],
+            target_index=targets,
+            target_string=None,
             path_source_token_strings=inputs[4] if self.estimator_action.is_predict else None,
             path_strings=inputs[5] if self.estimator_action.is_predict else None,
             path_target_token_strings=inputs[6] if self.estimator_action.is_predict else None
