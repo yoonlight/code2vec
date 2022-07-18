@@ -70,7 +70,7 @@ class Code2VecModel(Code2VecModelBase):
 
         # "Decode": Now we use another dense layer to get the target word embedding from each code vector.
         target_index = Dense(
-            1, use_bias=False, activation='sigmoid', name='target_index')(code_vectors)
+            3, use_bias=False, activation='softmax', name='target_index')(code_vectors)
 
         # Wrap the layers into a Keras model, using our subtoken-metrics and the CE loss.
         inputs = [path_source_token_input, path_input, path_target_token_input, context_valid_mask]
@@ -129,10 +129,8 @@ class Code2VecModel(Code2VecModelBase):
             return tf.constant(0.0, shape=(), dtype=tf.float32)
 
         self.keras_train_model.compile(
-            loss='binary_crossentropy',
-            metrics=['acc', Precision(), Recall(),
-            tfa.metrics.F1Score(num_classes=1)
-            ],
+            loss='sparse_categorical_crossentropy',
+            metrics=['acc'],
             optimizer=optimizer)
 
         # self.keras_eval_model.compile(
@@ -199,7 +197,6 @@ class Code2VecModel(Code2VecModelBase):
             # steps=self.config.test_steps,
             verbose=self.config.VERBOSE_MODE)
         self.log(eval_res)
-        self.log(val_data_input_reader.get_dataset())
         # self.log(self.keras_train_model.predict(val_data_input_reader.get_dataset()))
         # k = self.config.TOP_K_WORDS_CONSIDERED_DURING_PREDICTION
         # return ModelEvaluationResults(

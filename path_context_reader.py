@@ -184,8 +184,8 @@ class PathContextReader:
     def _map_raw_dataset_row_to_input_tensors(self, *row_parts) -> ReaderInputTensors:
         row_parts = list(row_parts)
         target_str = row_parts[0]
-        # target_index = self.vocabs.target_vocab.lookup_index(target_str)/2
-        target_index = 1 if target_str == "webshell" else 0
+        target_index = self.vocabs.target_vocab.lookup_index(target_str)
+        #target_index = 1 if "webshell" in target_str else 0
 
         contexts_str = tf.stack(row_parts[1:(self.config.MAX_CONTEXTS + 1)], axis=0)
         split_contexts = tf.compat.v1.string_split(contexts_str, sep=',', skip_empty=False)
