@@ -4,7 +4,7 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Embedding, Concatenate, Dropout, TimeDistributed, Dense, Flatten
 from tensorflow.keras.callbacks import Callback
 import tensorflow.keras.backend as K
-from tensorflow.keras.metrics import sparse_top_k_categorical_accuracy, Recall, Precision
+from tensorflow.keras.metrics import sparse_top_k_categorical_accuracy, Recall, Precision, FalseNegatives, FalsePositives, TrueNegatives, TruePositives
 import tensorflow_addons as tfa
 
 from path_context_reader import PathContextReader, ModelInputTensorsFormer, ReaderInputTensors, EstimatorAction
@@ -24,7 +24,7 @@ from common import common
 from model_base import Code2VecModelBase, ModelEvaluationResults, ModelPredictionResults
 from keras_checkpoint_saver_callback import ModelTrainingStatus, ModelTrainingStatusTrackerCallback,\
     ModelCheckpointSaverCallback, MultiBatchCallback, ModelTrainingProgressLoggerCallback
-from tensorflow.keras.callbacks import ModelCheckpoint
+from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 
 
 class Code2VecModel(Code2VecModelBase):
@@ -70,7 +70,7 @@ class Code2VecModel(Code2VecModelBase):
 
         # "Decode": Now we use another dense layer to get the target word embedding from each code vector.
         target_index = Dense(
-            3, use_bias=False, activation='softmax', name='target_index')(code_vectors)
+            1, use_bias=False, activation='sigmoid', name='target_index')(code_vectors)
 
         # Wrap the layers into a Keras model, using our subtoken-metrics and the CE loss.
         inputs = [path_source_token_input, path_input, path_target_token_input, context_valid_mask]
@@ -129,8 +129,9 @@ class Code2VecModel(Code2VecModelBase):
             return tf.constant(0.0, shape=(), dtype=tf.float32)
 
         self.keras_train_model.compile(
-            loss='sparse_categorical_crossentropy',
-            metrics=['acc'],
+            loss='binary_crossentropy',
+            metrics=['acc', Precision(), Recall(
+            ), tfa.metrics.F1Score(num_classes=1)],
             optimizer=optimizer)
 
         # self.keras_eval_model.compile(
@@ -149,11 +150,12 @@ class Code2VecModel(Code2VecModelBase):
     def _create_train_callbacks(self) -> List[Callback]:
         # TODO: do we want to use early stopping? if so, use the right chechpoint manager and set the correct
         #       `monitor` quantity (example: monitor='val_acc', mode='max')
-        checkpoint_filepath='models/jsp2/result.h5'
+        checkpoint_filepath = f'{self.config.MODEL_SAVE_PATH}/result.h5'
 
         keras_callbacks = [
             ModelTrainingStatusTrackerCallback(self.training_status),
             ModelTrainingProgressLoggerCallback(self.config, self.training_status),
+            EarlyStopping(monitor='loss', patience=3)
         ]
         if self.config.is_saving:
             keras_callbacks.append(ModelCheckpoint(filepath=checkpoint_filepath,
@@ -174,10 +176,23 @@ class Code2VecModel(Code2VecModelBase):
             keras_callbacks.append(tensorboard_callback)
         return keras_callbacks
 
+    def save(self, model_save_path=None):
+        if model_save_path is None:
+            model_save_path = self.config.MODEL_SAVE_PATH
+        model_save_dir = '/'.join(model_save_path.split('/')[:-1])
+        if not os.path.isdir(model_save_dir):
+            os.makedirs(model_save_dir, exist_ok=True)
+        self.vocabs.save(self.config.get_vocabularies_path_from_model_path(model_save_path))
+        self._save_inner_model(model_save_path)
+
     def train(self):
         # initialize the input pipeline reader
         train_data_input_reader = self._create_data_reader(estimator_action=EstimatorAction.Train)
         val_data_input_reader = self._create_data_reader(estimator_action=EstimatorAction.Evaluate)
+        # trains = train_data_input_reader.get_dataset().take(1).as_numpy_iterator()
+        # for train in trains:
+        #     print([len(a) for a in train])
+        #     print(train[-1])
 
         training_history = self.keras_train_model.fit(
             train_data_input_reader.get_dataset(),
