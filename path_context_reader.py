@@ -144,7 +144,7 @@ class PathContextReader:
         if self.estimator_action.is_predict:
             dataset = dataset.batch(1)
         else:
-            dataset = dataset.filter(self._filter_input_rows)
+            # dataset = dataset.filter(self._filter_input_rows)
             dataset = dataset.batch(batch_size)
 
         dataset = dataset.prefetch(buffer_size=40)  # original: tf.contrib.data.AUTOTUNE) -- got OOM err; 10 seems promising.
@@ -184,7 +184,11 @@ class PathContextReader:
     def _map_raw_dataset_row_to_input_tensors(self, *row_parts) -> ReaderInputTensors:
         row_parts = list(row_parts)
         target_str = row_parts[0]
-        target_index = self.vocabs.target_vocab.lookup_index(target_str)
+        keys_tensor = tf.constant(['webshell','normal'])
+        vals_tensor = tf.constant([1,0])
+        init = tf.lookup.KeyValueTensorInitializer(keys_tensor, vals_tensor)
+        table = tf.lookup.StaticHashTable(init, default_value=-1)
+        target_index = table.lookup(target_str)
 
         contexts_str = tf.stack(row_parts[1:(self.config.MAX_CONTEXTS + 1)], axis=0)
         split_contexts = tf.compat.v1.string_split(contexts_str, sep=',', skip_empty=False)

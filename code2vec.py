@@ -35,4 +35,6 @@ if __name__ == '__main__':
     if config.PREDICT:
         predictor = InteractivePredictor(config, model)
         predictor.predict()
+    else:
+        model.save()
     model.close_session()
