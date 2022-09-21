@@ -41,7 +41,7 @@ class InteractivePredictor:
             result.append(result_line)
         return result
 
-    def predict(self, input_filenames: List[TestFile]) -> List[TestFile]:
+    def predict(self, input_filenames: List[TestFile]):
         print('Starting interactive prediction...')
         results: List[TestFile] = []
         file_results: List[TestFile] = []

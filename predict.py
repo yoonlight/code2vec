@@ -17,7 +17,8 @@ if __name__ == '__main__':
         f"test_method_result_file_{int(datetime.now().timestamp())}.csv"
 
     reader = FileReader(FILE_NAME, TEST_PATH)
-    method_reader = FileReader(FILE_NAME, FILE_METHOD_NAME)
+    method_reader = FileReader(FILE_METHOD_NAME, TEST_PATH)
+
     reader.read_files()
     input_filenames = reader.test_files
     model = Code2VecModel(config)
