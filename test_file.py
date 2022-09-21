@@ -1,9 +1,9 @@
+from argparse import ArgumentParser
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import List
 import csv
-
-from extractor import Extractor
 
 
 @dataclass
@@ -29,38 +29,21 @@ class FileReader:
     def save2csv(self):
         with open(self.csv_file_name, "w") as f:
             writer = csv.writer(f)
+            writer.writerow(["path", "name", "method", "y_pred"])
             for file in self.test_files:
-                writer.writerow([file.path, file.name, file.method, file.predict])
+                writer.writerow(
+                    [file.path, file.name, file.method, file.predict])
 
-@dataclass
-class Config:
-    MAX_CONTEXTS = 200
 
 if __name__ == "__main__":
-    TEST_PATH = "data/my_test_dir"
-    FILE_NAME = "data/test_file.csv"
+    parser = ArgumentParser()
+    parser.add_argument("--path")
+    args = parser.parse_args()
+    PATH = Path(args.path)
+    TEST_PATH = PATH / "my_test_dir"
+    FILE_NAME = PATH / "test_file.csv"
 
     reader = FileReader(FILE_NAME, TEST_PATH)
     reader.read_files()
     input_filenames = reader.test_files
-    # reader.save2csv()
-
-    MAX_PATH_LENGTH = 8
-    MAX_PATH_WIDTH = 2
-    JAR_PATH = 'JavaExtractor/JPredict/target/JavaExtractor-0.0.1-SNAPSHOT.jar'
-    config = Config()
-    path_extractor = Extractor(config,
-                               jar_path=JAR_PATH,
-                               max_path_length=MAX_PATH_LENGTH,
-                               max_path_width=MAX_PATH_WIDTH)
-    for file in input_filenames:
-        try:
-            file_path = os.path.join(file.path, file.name)
-            predict_lines, hash_to_string_dict = path_extractor.extract_paths(
-                file_path)
-        except ValueError as e:
-            print(e)
-            continue
-        print(predict_lines)
-        # raw_prediction_results = model.predict(predict_lines)
-        # print(raw_prediction_results)
+    reader.save2csv()

@@ -6,14 +6,14 @@
 # test_data: by default, points to the validation set, since this is the set that
 #   will be evaluated after each training iteration. If you wish to test
 #   on the final (held-out) test set, change 'val' to 'test'.
-type=jsp2
-dataset_name=my_dataset2
-data_dir=data/${dataset_name}
+dataset_name=$1
+date=$2
+type=${dataset_name}_${date}
+data_dir=../dataset/${dataset_name}/${date}
 data=${data_dir}/${dataset_name}
 test_data=${data_dir}/${dataset_name}.val.c2v
 model_dir=models/${type}
 
-mkdir -p ${model_dir}
 set -e
 python3 -u predict.py --load ${model_dir}/saved_model --framework keras \
-    --test ${test_data} --predict
+    --test ${test_data} --predict --path $3

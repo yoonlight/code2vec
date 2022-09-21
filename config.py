@@ -41,6 +41,7 @@ class Config:
                             help="path to store logs into. if not given logs are not saved to file.")
         parser.add_argument('-tb', '--tensorboard', dest='use_tensorboard', action='store_true',
                             help='use tensorboard during training')
+        parser.add_argument('--path')
         return parser
 
     def set_defaults(self):

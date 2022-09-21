@@ -1,10 +1,10 @@
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, Embedding, Concatenate, Dropout, TimeDistributed, Dense, Flatten
+from tensorflow.keras.layers import Input, Embedding, Concatenate, Dropout, TimeDistributed, Dense
 from tensorflow.keras.callbacks import Callback
 import tensorflow.keras.backend as K
-from tensorflow.keras.metrics import sparse_top_k_categorical_accuracy, Recall, Precision, FalseNegatives, FalsePositives, TrueNegatives, TruePositives
+from tensorflow.keras.metrics import sparse_top_k_categorical_accuracy, Recall, Precision
 import tensorflow_addons as tfa
 
 from path_context_reader import PathContextReader, ModelInputTensorsFormer, ReaderInputTensors, EstimatorAction
@@ -17,13 +17,12 @@ import time
 import datetime
 from vocabularies import VocabType
 from keras_attention_layer import AttentionLayer
-from keras_topk_word_predictions_layer import TopKWordPredictionsLayer
 from keras_words_subtoken_metrics import WordsSubtokenPrecisionMetric, WordsSubtokenRecallMetric, WordsSubtokenF1Metric
 from config import Config
 from common import common
 from model_base import Code2VecModelBase, ModelEvaluationResults, ModelPredictionResults
 from keras_checkpoint_saver_callback import ModelTrainingStatus, ModelTrainingStatusTrackerCallback,\
-    ModelCheckpointSaverCallback, MultiBatchCallback, ModelTrainingProgressLoggerCallback
+    MultiBatchCallback, ModelTrainingProgressLoggerCallback
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 
 
@@ -231,28 +230,6 @@ class Code2VecModel(Code2VecModelBase):
             input_for_predict = input_row[0][:4]  # we want only the relevant input vectors (w.o. the targets).
             prediction_results = self.keras_train_model.predict(input_for_predict)
 
-            # # make `input_row` and `prediction_results` easy to read (by accessing named fields).
-            # prediction_results = KerasPredictionModelOutput(
-            #     *common.squeeze_single_batch_dimension_for_np_arrays(prediction_results))
-            # input_row = _KerasModelInputTensorsFormer(
-            #     estimator_action=EstimatorAction.Predict).from_model_input_form(input_row)
-            # input_row = ReaderInputTensors(*common.squeeze_single_batch_dimension_for_np_arrays(input_row))
-
-            # # calculate the attention weight for each context
-            # attention_per_context = self._get_attention_weight_per_context(
-            #     path_source_strings=input_row.path_source_token_strings,
-            #     path_strings=input_row.path_strings,
-            #     path_target_strings=input_row.path_target_token_strings,
-            #     attention_weights=prediction_results.attention_weights
-            # )
-
-            # # store the calculated prediction results in the wanted format.
-            # model_prediction_results = ModelPredictionResults(
-            #     original_name=common.binary_to_string(input_row.target_string.item()),
-            #     topk_predicted_words=common.binary_to_string_list(prediction_results.topk_predicted_words),
-            #     topk_predicted_words_scores=prediction_results.topk_predicted_words_scores,
-            #     attention_per_context=attention_per_context,
-            #     code_vector=prediction_results.code_vectors)
             all_model_prediction_results.append(prediction_results)
 
         return all_model_prediction_results

@@ -6,13 +6,16 @@
 # test_data: by default, points to the validation set, since this is the set that
 #   will be evaluated after each training iteration. If you wish to test
 #   on the final (held-out) test set, change 'val' to 'test'.
-type=java14m
-dataset_name=java14m
-data_dir=data/${dataset_name}
+dataset_name=$1
+date=$2
+type=${dataset_name}_${date}
+data_dir=../dataset/${dataset_name}/${date}
 data=${data_dir}/${dataset_name}
 test_data=${data_dir}/${dataset_name}.val.c2v
 model_dir=models/${type}
 
 mkdir -p ${model_dir}
+mkdir -p ${model_dir}/saved_model
+
 set -e
-python3 -u code2vec.py --data ${data} --test ${test_data} --save ${model_dir}/saved_model
+python3 -u code2vec.py --data ${data} --test ${test_data} --save ${model_dir}/saved_model --framework keras
