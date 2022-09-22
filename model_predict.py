@@ -3,6 +3,7 @@ from extractor import Extractor
 from keras_model import Code2VecModel
 import os
 import numpy as np
+from tqdm import tqdm
 
 from test_file import TestFile
 
@@ -45,12 +46,12 @@ class InteractivePredictor:
         print('Starting interactive prediction...')
         results: List[TestFile] = []
         file_results: List[TestFile] = []
-        for idx, file in enumerate(input_filenames):
+        for file in tqdm(input_filenames):
             file_path = os.path.join(file.path, file.name)
             lines = self.extract_paths(file_path)
-            raw_prediction_results: List[np.ndarray] = self.model.predict(
-                lines)
             method_num = len(lines)
+            raw_prediction_results: List[np.ndarray] = self.model.predict(
+                lines, method_num)
             predict_file_result = None
             for result in raw_prediction_results:
                 y_true = np.squeeze(result.round())

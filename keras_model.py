@@ -23,7 +23,7 @@ from common import common
 from model_base import Code2VecModelBase, ModelEvaluationResults, ModelPredictionResults
 from keras_checkpoint_saver_callback import ModelTrainingStatus, ModelTrainingStatusTrackerCallback,\
     MultiBatchCallback, ModelTrainingProgressLoggerCallback
-from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
+from tensorflow.keras.callbacks import ModelCheckpoint
 
 
 class Code2VecModel(Code2VecModelBase):
@@ -154,7 +154,6 @@ class Code2VecModel(Code2VecModelBase):
         keras_callbacks = [
             ModelTrainingStatusTrackerCallback(self.training_status),
             ModelTrainingProgressLoggerCallback(self.config, self.training_status),
-            EarlyStopping(monitor='loss', patience=3)
         ]
         if self.config.is_saving:
             keras_callbacks.append(ModelCheckpoint(filepath=checkpoint_filepath,
@@ -221,14 +220,19 @@ class Code2VecModel(Code2VecModelBase):
         #     loss=eval_res[1]
         # )
 
-    def predict(self, predict_data_rows: Iterable[str]) -> List[ModelPredictionResults]:
+    def predict(self, predict_data_rows: Iterable[str], method_num: int) -> List[ModelPredictionResults]:
         predict_input_reader = self._create_data_reader(estimator_action=EstimatorAction.Predict)
         input_iterator = predict_input_reader.process_and_iterate_input_from_data_lines(predict_data_rows)
         all_model_prediction_results = []
         for input_row in input_iterator:
             # perform the actual prediction and get raw results.
             input_for_predict = input_row[0][:4]  # we want only the relevant input vectors (w.o. the targets).
-            prediction_results = self.keras_train_model.predict(input_for_predict)
+            prediction_results = self.keras_train_model(input_for_predict).numpy()
+            # TODO: batch 처리 조건 문 추가
+            # if method_num == 1:
+            #     prediction_results = self.keras_train_model(input_for_predict).numpy()
+            # else:
+            #     prediction_results = self.keras_train_model.predict(input_for_predict)
 
             all_model_prediction_results.append(prediction_results)
 
