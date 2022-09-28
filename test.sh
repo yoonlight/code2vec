@@ -16,4 +16,4 @@ model_dir=models/${type}
 
 set -e
 python3 -u predict.py --load ${model_dir}/saved_model --framework keras \
-    --test ${test_data} --predict --path $3
+    --test ${test_data} --predict --path ${data_dir}
