@@ -12,6 +12,7 @@ class TestFile:
     name: str
     method: str
     predict: float
+    time_elapse: float
 
 
 class FileReader:
@@ -24,15 +25,17 @@ class FileReader:
     def read_files(self):
         for dirpath, _, filenames in os.walk(self.file_path):
             for filename in filenames:
-                self.test_files.append(TestFile(dirpath, filename, None, None))
+                self.test_files.append(
+                    TestFile(dirpath, filename, None, None, None))
 
     def save2csv(self):
         with open(self.csv_file_name, "w") as f:
             writer = csv.writer(f)
-            writer.writerow(["path", "name", "method", "y_pred"])
+            writer.writerow(
+                ["path", "name", "method", "time_elapse", "y_pred"])
             for file in self.test_files:
                 writer.writerow(
-                    [file.path, file.name, file.method, file.predict])
+                    [file.path, file.name, file.method, file.time_elapse, file.predict])
 
 
 if __name__ == "__main__":
