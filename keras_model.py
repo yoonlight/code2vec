@@ -1,10 +1,10 @@
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, Embedding, Concatenate, Dropout, TimeDistributed, Dense
-from tensorflow.keras.callbacks import Callback
-import tensorflow.keras.backend as K
-from tensorflow.keras.metrics import sparse_top_k_categorical_accuracy, Recall, Precision
+from keras.models import Model
+from keras.layers import Input, Embedding, Concatenate, Dropout, TimeDistributed, Dense
+from keras.callbacks import Callback
+import keras.backend as K
+from keras.metrics import sparse_top_k_categorical_accuracy, Recall, Precision
 import tensorflow_addons as tfa
 
 from path_context_reader import PathContextReader, ModelInputTensorsFormer, ReaderInputTensors, EstimatorAction
@@ -23,7 +23,7 @@ from common import common
 from model_base import Code2VecModelBase, ModelEvaluationResults, ModelPredictionResults
 from keras_checkpoint_saver_callback import ModelTrainingStatus, ModelTrainingStatusTrackerCallback,\
     MultiBatchCallback, ModelTrainingProgressLoggerCallback
-from tensorflow.keras.callbacks import ModelCheckpoint
+from keras.callbacks import ModelCheckpoint
 
 
 class Code2VecModel(Code2VecModelBase):
@@ -39,9 +39,11 @@ class Code2VecModel(Code2VecModelBase):
     def _create_keras_model(self):
         # Each input sample consists of a bag of x`MAX_CONTEXTS` tuples (source_terminal, path, target_terminal).
         # The valid mask indicates for each context whether it actually exists or it is just a padding.
-        path_source_token_input = Input((self.config.MAX_CONTEXTS,), dtype=tf.int32)
+        path_source_token_input = Input(
+            (self.config.MAX_CONTEXTS,), dtype=tf.int32)
         path_input = Input((self.config.MAX_CONTEXTS,), dtype=tf.int32)
-        path_target_token_input = Input((self.config.MAX_CONTEXTS,), dtype=tf.int32)
+        path_target_token_input = Input(
+            (self.config.MAX_CONTEXTS,), dtype=tf.int32)
         context_valid_mask = Input((self.config.MAX_CONTEXTS,))
 
         # Input paths are indexes, we embed these here.
@@ -51,13 +53,17 @@ class Code2VecModel(Code2VecModelBase):
         # Input terminals are indexes, we embed these here.
         token_embedding_shared_layer = Embedding(
             self.vocabs.token_vocab.size, self.config.TOKEN_EMBEDDINGS_SIZE, name='token_embedding')
-        path_source_token_embedded = token_embedding_shared_layer(path_source_token_input)
-        path_target_token_embedded = token_embedding_shared_layer(path_target_token_input)
+        path_source_token_embedded = token_embedding_shared_layer(
+            path_source_token_input)
+        path_target_token_embedded = token_embedding_shared_layer(
+            path_target_token_input)
 
         # `Context` is a concatenation of the 2 terminals & path embedding.
         # Each context is a vector of size 3 * EMBEDDINGS_SIZE.
-        context_embedded = Concatenate()([path_source_token_embedded, paths_embedded, path_target_token_embedded])
-        context_embedded = Dropout(1 - self.config.DROPOUT_KEEP_RATE)(context_embedded)
+        context_embedded = Concatenate()(
+            [path_source_token_embedded, paths_embedded, path_target_token_embedded])
+        context_embedded = Dropout(
+            1 - self.config.DROPOUT_KEEP_RATE)(context_embedded)
 
         # Lets get dense: Apply a dense layer for each context vector (using same weights for all of the context).
         context_after_dense = TimeDistributed(
@@ -72,7 +78,8 @@ class Code2VecModel(Code2VecModelBase):
             1, use_bias=False, activation='sigmoid', name='target_index')(code_vectors)
 
         # Wrap the layers into a Keras model, using our subtoken-metrics and the CE loss.
-        inputs = [path_source_token_input, path_input, path_target_token_input, context_valid_mask]
+        inputs = [path_source_token_input, path_input,
+                  path_target_token_input, context_valid_mask]
         self.keras_train_model = Model(inputs=inputs, outputs=target_index)
 
         # Actual target word predictions (as strings). Used as a second output layer.
@@ -104,13 +111,18 @@ class Code2VecModel(Code2VecModelBase):
             top_k_acc_metric.__name__ = 'top{k}_acc'.format(k=k)
             top_k_acc_metrics.append(top_k_acc_metric)
         predicted_words_filters = [
-            lambda word_strings: tf.not_equal(word_strings, self.vocabs.target_vocab.special_words.OOV),
-            lambda word_strings: tf.strings.regex_full_match(word_strings, r'^[a-zA-Z\|]+$')
+            lambda word_strings: tf.not_equal(
+                word_strings, self.vocabs.target_vocab.special_words.OOV),
+            lambda word_strings: tf.strings.regex_full_match(
+                word_strings, r'^[a-zA-Z\|]+$')
         ]
         words_subtokens_metrics = [
-            WordsSubtokenPrecisionMetric(predicted_words_filters=predicted_words_filters, name='subtoken_precision'),
-            WordsSubtokenRecallMetric(predicted_words_filters=predicted_words_filters, name='subtoken_recall'),
-            WordsSubtokenF1Metric(predicted_words_filters=predicted_words_filters, name='subtoken_f1')
+            WordsSubtokenPrecisionMetric(
+                predicted_words_filters=predicted_words_filters, name='subtoken_precision'),
+            WordsSubtokenRecallMetric(
+                predicted_words_filters=predicted_words_filters, name='subtoken_recall'),
+            WordsSubtokenF1Metric(
+                predicted_words_filters=predicted_words_filters, name='subtoken_f1')
         ]
         return {'target_index': top_k_acc_metrics, 'target_string': words_subtokens_metrics}
 
@@ -142,7 +154,8 @@ class Code2VecModel(Code2VecModelBase):
         return PathContextReader(
             vocabs=self.vocabs,
             config=self.config,
-            model_input_tensors_former=_KerasModelInputTensorsFormer(estimator_action=estimator_action),
+            model_input_tensors_former=_KerasModelInputTensorsFormer(
+                estimator_action=estimator_action),
             estimator_action=estimator_action,
             repeat_endlessly=repeat_endlessly)
 
@@ -153,7 +166,8 @@ class Code2VecModel(Code2VecModelBase):
 
         keras_callbacks = [
             ModelTrainingStatusTrackerCallback(self.training_status),
-            ModelTrainingProgressLoggerCallback(self.config, self.training_status),
+            ModelTrainingProgressLoggerCallback(
+                self.config, self.training_status),
         ]
         if self.config.is_saving:
             keras_callbacks.append(ModelCheckpoint(filepath=checkpoint_filepath,
@@ -161,7 +175,7 @@ class Code2VecModel(Code2VecModelBase):
                                                    monitor='loss',
                                                    mode='min',
                                                    verbose=1,
-                                                   save_best_only=True))            
+                                                   save_best_only=True))
             # keras_callbacks.append(ModelCheckpointSaverCallback(
             #     self, self.config.SAVE_EVERY_EPOCHS, self.logger))
         if self.config.is_testing:
@@ -180,13 +194,16 @@ class Code2VecModel(Code2VecModelBase):
         model_save_dir = '/'.join(model_save_path.split('/')[:-1])
         if not os.path.isdir(model_save_dir):
             os.makedirs(model_save_dir, exist_ok=True)
-        self.vocabs.save(self.config.get_vocabularies_path_from_model_path(model_save_path))
+        self.vocabs.save(
+            self.config.get_vocabularies_path_from_model_path(model_save_path))
         self._save_inner_model(model_save_path)
 
     def train(self):
         # initialize the input pipeline reader
-        train_data_input_reader = self._create_data_reader(estimator_action=EstimatorAction.Train)
-        val_data_input_reader = self._create_data_reader(estimator_action=EstimatorAction.Evaluate)
+        train_data_input_reader = self._create_data_reader(
+            estimator_action=EstimatorAction.Train)
+        val_data_input_reader = self._create_data_reader(
+            estimator_action=EstimatorAction.Evaluate)
         # trains = train_data_input_reader.get_dataset().take(1).as_numpy_iterator()
         # for train in trains:
         #     print([len(a) for a in train])
@@ -204,7 +221,8 @@ class Code2VecModel(Code2VecModelBase):
         self.log(training_history)
 
     def evaluate(self) -> Optional[ModelEvaluationResults]:
-        val_data_input_reader = self._create_data_reader(estimator_action=EstimatorAction.Evaluate)
+        val_data_input_reader = self._create_data_reader(
+            estimator_action=EstimatorAction.Evaluate)
         eval_res = self.keras_train_model.evaluate(
             val_data_input_reader.get_dataset(),
             # steps=self.config.test_steps,
@@ -220,29 +238,73 @@ class Code2VecModel(Code2VecModelBase):
         #     loss=eval_res[1]
         # )
 
+    def convert_tflite_model(self):
+        converter = tf.lite.TFLiteConverter.from_keras_model(
+            self.keras_train_model)
+        tflite_model = converter.convert()
+        self.lite_model = tf.lite.Interpreter(model_content=tflite_model)
+        self.lite_model.allocate_tensors()
+
     def predict(self, predict_data_rows: Iterable[str], method_num: int) -> List[ModelPredictionResults]:
-        predict_input_reader = self._create_data_reader(estimator_action=EstimatorAction.Predict)
-        input_iterator = predict_input_reader.process_and_iterate_input_from_data_lines(predict_data_rows)
+
+        predict_input_reader = self._create_data_reader(
+            estimator_action=EstimatorAction.Predict)
+        input_iterator = predict_input_reader.process_and_iterate_input_from_data_lines(
+            predict_data_rows)
         all_model_prediction_results = []
+        input_for_predicts = []
+        input_1 = []
+        input_2 = []
+        input_3 = []
+        input_4 = []
+        detail = self.lite_model.get_input_details()
         for input_row in input_iterator:
             # perform the actual prediction and get raw results.
-            input_for_predict = input_row[0][:4]  # we want only the relevant input vectors (w.o. the targets).
-            prediction_results = self.keras_train_model(input_for_predict).numpy()
+            # we want only the relevant input vectors (w.o. the targets).
+            # input_for_predict = input_row[0][:4]
             # TODO: batch 처리 조건 문 추가
-            # if method_num == 1:
-            #     prediction_results = self.keras_train_model(input_for_predict).numpy()
-            # else:
-            #     prediction_results = self.keras_train_model.predict(input_for_predict)
-
+            # if method_num < 10:
+            self.lite_model.set_tensor(detail[0]['index'], np.array(
+                input_row[0][0], dtype=detail[0]['shape'].dtype))
+            self.lite_model.set_tensor(detail[1]['index'], np.array(
+                input_row[0][1], dtype=np.float32))
+            self.lite_model.set_tensor(detail[2]['index'], np.array(
+                input_row[0][2], dtype=detail[2]['shape'].dtype))
+            self.lite_model.set_tensor(detail[3]['index'], np.array(
+                input_row[0][3], dtype=detail[3]['shape'].dtype))
+            self.lite_model.invoke()
+            prediction_results = self.lite_model.get_tensor(
+                self.lite_model.get_output_details()[0]['index'])
             all_model_prediction_results.append(prediction_results)
+            y_true = np.squeeze(prediction_results.round())
+            if y_true == 1:
+                break
+            # else:
+            #     input_1.append(input_row[0][0])
+            #     input_2.append(input_row[0][1])
+            #     input_3.append(input_row[0][2])
+            #     input_4.append(input_row[0][3])
+
+        # inputs = [
+        #     np.array(input_1).squeeze(),
+        #     np.array(input_2).squeeze(),
+        #     np.array(input_3).squeeze(),
+        #     np.array(input_4).squeeze(),
+        # ]
+        # if method_num > 10:
+        #     data = TestDataSequence(inputs, 32)
+        #     all_model_prediction_results = self.keras_train_model.predict(
+        #         data, batch_size=32, use_multiprocessing=True, workers=8, verbose=2)
 
         return all_model_prediction_results
 
     def _save_inner_model(self, path):
         if self.config.RELEASE:
-            self.keras_train_model.save_weights(self.config.get_model_weights_path(path))
+            self.keras_train_model.save_weights(
+                self.config.get_model_weights_path(path))
         else:
-            self._get_checkpoint_manager().save(checkpoint_number=self.training_status.nr_epochs_trained)
+            self._get_checkpoint_manager().save(
+                checkpoint_number=self.training_status.nr_epochs_trained)
 
     def _create_inner_model(self):
         self._create_keras_model()
@@ -256,8 +318,10 @@ class Code2VecModel(Code2VecModelBase):
         # when loading the model for further training, we must use the full saved model file (not just weights).
         # we load the entire model if we must to or if there is no model weights file to load.
         must_use_entire_model = self.config.is_training
-        entire_model_exists = os.path.exists(self.config.entire_model_load_path)
-        model_weights_exist = os.path.exists(self.config.model_weights_load_path)
+        entire_model_exists = os.path.exists(
+            self.config.entire_model_load_path)
+        model_weights_exist = os.path.exists(
+            self.config.model_weights_load_path)
         use_full_model = must_use_entire_model or not model_weights_exist
 
         if must_use_entire_model and not entire_model_exists:
@@ -273,20 +337,26 @@ class Code2VecModel(Code2VecModelBase):
                     model_weights_path=self.config.model_weights_load_path))
 
         if use_full_model:
-            self.log('Loading entire model from path `{}`.'.format(self.config.entire_model_load_path))
-            latest_checkpoint = tf.train.latest_checkpoint(self.config.entire_model_load_path)
+            self.log('Loading entire model from path `{}`.'.format(
+                self.config.entire_model_load_path))
+            latest_checkpoint = tf.train.latest_checkpoint(
+                self.config.entire_model_load_path)
             if latest_checkpoint is None:
-                raise ValueError("Failed to load model: Model latest checkpoint is not found.")
+                raise ValueError(
+                    "Failed to load model: Model latest checkpoint is not found.")
             self.log('Loading latest checkpoint `{}`.'.format(latest_checkpoint))
             status = self._get_checkpoint().restore(latest_checkpoint)
             status.initialize_or_restore()
             # FIXME: are we sure we have to re-compile here? I turned it off to save the optimizer state
             # self._compile_keras_model()  # We have to re-compile because we also recovered the `tf.train.AdamOptimizer`.
-            self.training_status.nr_epochs_trained = int(latest_checkpoint.split('-')[-1])
+            self.training_status.nr_epochs_trained = int(
+                latest_checkpoint.split('-')[-1])
         else:
             # load the "released" model (only the weights).
-            self.log('Loading model weights from path `{}`.'.format(self.config.model_weights_load_path))
-            self.keras_train_model.load_weights(self.config.model_weights_load_path)
+            self.log('Loading model weights from path `{}`.'.format(
+                self.config.model_weights_load_path))
+            self.keras_train_model.load_weights(
+                self.config.model_weights_load_path)
 
         self.keras_train_model.summary(print_fn=self.log)
 
@@ -315,7 +385,8 @@ class Code2VecModel(Code2VecModelBase):
             VocabType.Path: 'path_embedding'
         }
         embedding_layer_name = vocab_type_to_embedding_layer_mapping[vocab_type]
-        weight = np.array(self.keras_train_model.get_layer(embedding_layer_name).get_weights()[0])
+        weight = np.array(self.keras_train_model.get_layer(
+            embedding_layer_name).get_weights()[0])
         assert len(weight.shape) == 2
 
         # token, path have an actual `Embedding` layers, but target have just a `Dense` layer.
@@ -347,7 +418,8 @@ class ModelEvaluationCallback(MultiBatchCallback):
     def __init__(self, code2vec_model: 'Code2VecModel'):
         self.code2vec_model = code2vec_model
         self.avg_eval_duration: Optional[int] = None
-        super(ModelEvaluationCallback, self).__init__(self.code2vec_model.config.NUM_TRAIN_BATCHES_TO_EVALUATE)
+        super(ModelEvaluationCallback, self).__init__(
+            self.code2vec_model.config.NUM_TRAIN_BATCHES_TO_EVALUATE)
 
     def on_epoch_end(self, epoch, logs=None):
         self.perform_evaluation()

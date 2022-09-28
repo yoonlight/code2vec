@@ -4,6 +4,7 @@ from keras_model import Code2VecModel
 import os
 import numpy as np
 from tqdm import tqdm
+from timeit import default_timer as timer
 
 from test_file import TestFile
 
@@ -21,6 +22,7 @@ class InteractivePredictor:
                                         jar_path=JAR_PATH,
                                         max_path_length=MAX_PATH_LENGTH,
                                         max_path_width=MAX_PATH_WIDTH)
+
     def extract_paths(self, path):
         MAX_CONTEXTS = 200
         f = open(path, "r", encoding="utf-8", errors="ignore")
@@ -36,7 +38,8 @@ class InteractivePredictor:
                 context_word1 = context_parts[0]
                 context_path = context_parts[1]
                 context_word2 = context_parts[2]
-                current_result_line_parts += ['%s,%s,%s' % (context_word1, context_path, context_word2)]
+                current_result_line_parts += ['%s,%s,%s' %
+                                              (context_word1, context_path, context_word2)]
             space_padding = ' ' * (MAX_CONTEXTS - len(contexts))
             result_line = ' '.join(current_result_line_parts) + space_padding
             result.append(result_line)
@@ -46,21 +49,28 @@ class InteractivePredictor:
         print('Starting interactive prediction...')
         results: List[TestFile] = []
         file_results: List[TestFile] = []
-        for file in tqdm(input_filenames):
+        pbar = tqdm(input_filenames)
+        for file in pbar:
+            start_time = timer()
             file_path = os.path.join(file.path, file.name)
             lines = self.extract_paths(file_path)
             method_num = len(lines)
+            pbar.set_postfix({'method_num': method_num})
             raw_prediction_results: List[np.ndarray] = self.model.predict(
                 lines, method_num)
             predict_file_result = None
+            end_time = timer()-start_time
             for result in raw_prediction_results:
                 y_true = np.squeeze(result.round())
-                predict_result = TestFile(file.path, file.name, method_num, y_true)
+                predict_result = TestFile(
+                    file.path, file.name, method_num, y_true, end_time)
                 results.append(predict_result)
                 if y_true == 1:
-                    predict_file_result = TestFile(file.path, file.name, method_num, y_true)
+                    predict_file_result = TestFile(
+                        file.path, file.name, method_num, y_true, end_time)
             if predict_file_result is None:
-                predict_file_result = TestFile(file.path, file.name, method_num, 0)
+                predict_file_result = TestFile(
+                    file.path, file.name, method_num, 0, end_time)
             file_results.append(predict_file_result)
-                
+
         return file_results, results

@@ -22,7 +22,7 @@ if __name__ == '__main__':
     reader.read_files()
     input_filenames = reader.test_files
     model = Code2VecModel(config)
-
+    model.convert_tflite_model()
     if config.PREDICT:
         start_time = datetime.now().replace(microsecond=0)
 
